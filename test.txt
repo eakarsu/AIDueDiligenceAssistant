@@ -1,0 +1,43 @@
+To test the extra features with frontend buttons, you need to start both the backend and frontend servers.
+
+  1. Start the Backend Server:
+
+  cd /Users/erolakarsu/projects/AIDueDiligenceAssistant/backend
+  npm install   # if not done already
+  npm start     # or node server.js
+
+  2. Start the Frontend Server (in a new terminal):
+
+  cd /Users/erolakarsu/projects/AIDueDiligenceAssistant/frontend
+  npm install   # if not done already
+  npm start
+
+  3. Open Browser:
+
+  Go to http://localhost:3000
+
+  4. Test Each Feature:
+  ┌─────────────┬──────────────┬─────────────────────────────────────────────────────────────────────┐
+  │    Page     │     URL      │                            What to Test                             │
+  ├─────────────┼──────────────┼─────────────────────────────────────────────────────────────────────┤
+  │ Deals       │ /deals       │ + Add Deal, click row for details, Edit/Delete buttons, AI Analysis │
+  ├─────────────┼──────────────┼─────────────────────────────────────────────────────────────────────┤
+  │ Management  │ /management  │ + Add Executive, click row, Edit/Delete, AI Leadership Analysis     │
+  ├─────────────┼──────────────┼─────────────────────────────────────────────────────────────────────┤
+  │ Legal       │ /legal       │ + Add Legal Issue, click row, Edit/Delete, AI Legal Analysis        │
+  ├─────────────┼──────────────┼─────────────────────────────────────────────────────────────────────┤
+  │ Competitors │ /competitors │ + Add Competitor, click row, Edit/Delete, AI Competitive Analysis   │
+  ├─────────────┼──────────────┼─────────────────────────────────────────────────────────────────────┤
+  │ Market      │ /market      │ + Add Market Analysis, click row, Edit/Delete, AI Market Analysis   │
+  └─────────────┴──────────────┴─────────────────────────────────────────────────────────────────────┘
+  5. Testing Flow for Each Page:
+
+  1. Click "+ Add [Item]" button to create new record
+  2. Fill form and click Create
+  3. Click on a row in the table to open detail modal
+  4. In detail modal, test:
+    - Edit button (opens edit form)
+    - Delete button (confirms and deletes)
+    - AI Analysis button (calls OpenRouter API)
+
+  Would you like me to check if the servers are configured correctly or verify any specific files?
