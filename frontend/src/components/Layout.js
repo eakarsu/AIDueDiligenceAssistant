@@ -20,6 +20,8 @@ const menuItems = [
   { path: '/valuation-modeler', label: 'AI Valuation Modeler', icon: '💎', isAI: true },
   { path: '/red-flag-detector', label: 'AI Red Flag Detector', icon: '🔴', isAI: true },
   { path: '/integration-planner', label: 'AI Integration Planner', icon: '🗺️', isAI: true },
+  { path: '/watchlist', label: 'Watchlist Alerts', icon: '🔔', isAI: true },
+  { path: '/ai-tools', label: 'AI Deal Tools', icon: '🧠', isAI: true },
   { divider: true, label: 'Account' },
   { path: '/profile', label: 'My Profile', icon: '👤' },
   { path: '/settings', label: 'Settings', icon: '⚙️' },

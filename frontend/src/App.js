@@ -22,8 +22,12 @@ import SynergyCalculator from './pages/SynergyCalculator';
 import ValuationModeler from './pages/ValuationModeler';
 import RedFlagDetector from './pages/RedFlagDetector';
 import IntegrationPlanner from './pages/IntegrationPlanner';
+import Watchlist from './pages/Watchlist';
+import AITools from './pages/AITools';
 import Profile from './pages/Profile';
 import Settings from './pages/Settings';
+
+import Batch03Features from './pages/Batch03Features';
 
 const ProtectedRoute = ({ children, requiredPermission }) => {
   const { token, loading, hasPermission } = useAuth();
@@ -58,6 +62,7 @@ function App() {
         <ToastProvider>
           <Router>
             <Routes>
+          <Route path="/batch03" element={<Batch03Features />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               <Route path="/" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
@@ -76,6 +81,8 @@ function App() {
               <Route path="/valuation-modeler" element={<ProtectedRoute><Layout><ValuationModeler /></Layout></ProtectedRoute>} />
               <Route path="/red-flag-detector" element={<ProtectedRoute><Layout><RedFlagDetector /></Layout></ProtectedRoute>} />
               <Route path="/integration-planner" element={<ProtectedRoute><Layout><IntegrationPlanner /></Layout></ProtectedRoute>} />
+              <Route path="/watchlist" element={<ProtectedRoute><Layout><Watchlist /></Layout></ProtectedRoute>} />
+              <Route path="/ai-tools" element={<ProtectedRoute><Layout><AITools /></Layout></ProtectedRoute>} />
               <Route path="/profile" element={<ProtectedRoute><Layout><Profile /></Layout></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
             </Routes>

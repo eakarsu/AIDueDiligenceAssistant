@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
@@ -8,10 +9,26 @@ const pool = require('./db');
 
 const app = express();
 const PORT = process.env.BACKEND_PORT || 3001;
+const { aiRateLimiter } = require('./middleware/rateLimiter');
+const { parseAIJson } = require('./middleware/parseAIJson');
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+// Security headers
+app.use(helmet({ contentSecurityPolicy: false }));
+
+// Env-driven CORS allowlist
+const corsOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000,http://localhost:5173')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true);
+    if (corsOrigins.includes('*') || corsOrigins.includes(origin)) return cb(null, true);
+    return cb(new Error(`CORS blocked for origin: ${origin}`));
+  },
+  credentials: true,
+}));
+app.use(express.json({ limit: '1mb' }));
 
 // JWT Middleware
 const authenticateToken = (req, res, next) => {
@@ -58,7 +75,7 @@ const validatePassword = (pw) => pw && pw.length >= 6 && /[A-Z]/.test(pw) && /[0
 // OpenRouter AI Service - Updated to use configured model
 const callOpenRouterAI = async (prompt, systemPrompt = '') => {
   try {
-    const model = process.env.OPENROUTER_MODEL || 'anthropic/claude-haiku-4.5';
+    const model = process.env.OPENROUTER_MODEL || 'anthropic/claude-3-5-sonnet-20241022';
     const response = await axios.post(
       `${process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1'}/chat/completions`,
       {
@@ -239,11 +256,21 @@ app.put('/api/auth/profile', authenticateToken, async (req, res) => {
 
 // ==================== COMPANIES ROUTES ====================
 
-// Get all companies
+// Get all companies (paginated)
 app.get('/api/companies', authenticateToken, async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM companies ORDER BY created_at DESC');
-    res.json(result.rows);
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const offset = (page - 1) * limit;
+    const [dataRes, countRes] = await Promise.all([
+      pool.query('SELECT * FROM companies ORDER BY created_at DESC LIMIT $1 OFFSET $2', [limit, offset]),
+      pool.query('SELECT COUNT(*) FROM companies')
+    ]);
+    const total = parseInt(countRes.rows[0].count);
+    res.json({
+      data: dataRes.rows,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
+    });
   } catch (error) {
     console.error('Error fetching companies:', error);
     res.status(500).json({ error: 'Server error' });
@@ -268,10 +295,14 @@ app.get('/api/companies/:id', authenticateToken, async (req, res) => {
 app.post('/api/companies', authenticateToken, async (req, res) => {
   try {
     const { name, industry, revenue, employees, headquarters, website, description, status } = req.body;
+    const errors = {};
+    if (!name || (typeof name === 'string' && !name.trim())) errors.name = 'name is required';
+    if (!industry || (typeof industry === 'string' && !industry.trim())) errors.industry = 'industry is required';
+    if (Object.keys(errors).length > 0) return res.status(400).json({ error: 'Validation failed', errors });
     const result = await pool.query(
       `INSERT INTO companies (name, industry, revenue, employees, headquarters, website, description, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [name, industry, revenue, employees, headquarters, website, description, status || 'Under Review']
+      [name.trim(), industry.trim(), revenue, employees, headquarters, website, description, status || 'Under Review']
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
@@ -315,7 +346,7 @@ app.delete('/api/companies/:id', authenticateToken, async (req, res) => {
 });
 
 // AI: Analyze company
-app.post('/api/companies/:id/analyze', authenticateToken, async (req, res) => {
+app.post('/api/companies/:id/analyze', authenticateToken, aiRateLimiter, async (req, res) => {
   try {
     const company = await pool.query('SELECT * FROM companies WHERE id = $1', [req.params.id]);
     if (company.rows.length === 0) {
@@ -340,13 +371,14 @@ app.post('/api/companies/:id/analyze', authenticateToken, async (req, res) => {
     6. Recommended Next Steps`;
 
     const analysis = await callOpenRouterAI(prompt);
+    const parsedJson = parseAIJson(analysis);
 
     await pool.query(
-      'UPDATE companies SET ai_analysis = $1, ai_analyzed_at = NOW() WHERE id = $2',
-      [analysis, req.params.id]
+      'UPDATE companies SET ai_analysis = $1, ai_results = $2, ai_analyzed_at = NOW() WHERE id = $3',
+      [analysis, JSON.stringify({ raw: analysis, parsed: parsedJson }), req.params.id]
     );
 
-    res.json({ analysis, saved: true });
+    res.json({ analysis, ai_json: parsedJson, saved: true });
   } catch (error) {
     console.error('Error analyzing company:', error);
     res.status(500).json({ error: error.message || 'Server error' });
@@ -357,13 +389,23 @@ app.post('/api/companies/:id/analyze', authenticateToken, async (req, res) => {
 
 app.get('/api/financials', authenticateToken, async (req, res) => {
   try {
-    const result = await pool.query(`
-      SELECT f.*, c.name as company_name
-      FROM financial_analysis f
-      LEFT JOIN companies c ON f.company_id = c.id
-      ORDER BY f.created_at DESC
-    `);
-    res.json(result.rows);
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const offset = (page - 1) * limit;
+    const [dataRes, countRes] = await Promise.all([
+      pool.query(`
+        SELECT f.*, c.name as company_name
+        FROM financial_analysis f
+        LEFT JOIN companies c ON f.company_id = c.id
+        ORDER BY f.created_at DESC LIMIT $1 OFFSET $2
+      `, [limit, offset]),
+      pool.query('SELECT COUNT(*) FROM financial_analysis')
+    ]);
+    const total = parseInt(countRes.rows[0].count);
+    res.json({
+      data: dataRes.rows,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
+    });
   } catch (error) {
     console.error('Error fetching financials:', error);
     res.status(500).json({ error: 'Server error' });
@@ -435,7 +477,7 @@ app.delete('/api/financials/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/financials/:id/analyze', authenticateToken, async (req, res) => {
+app.post('/api/financials/:id/analyze', authenticateToken, aiRateLimiter, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT f.*, c.name as company_name
@@ -470,13 +512,14 @@ app.post('/api/financials/:id/analyze', authenticateToken, async (req, res) => {
     6. Recommendations`;
 
     const analysis = await callOpenRouterAI(prompt);
+    const parsedJson = parseAIJson(analysis);
 
     await pool.query(
-      'UPDATE financial_analysis SET ai_analysis = $1, ai_analyzed_at = NOW() WHERE id = $2',
-      [analysis, req.params.id]
+      'UPDATE financial_analysis SET ai_analysis = $1, ai_results = $2, ai_analyzed_at = NOW() WHERE id = $3',
+      [analysis, JSON.stringify({ raw: analysis, parsed: parsedJson }), req.params.id]
     );
 
-    res.json({ analysis, saved: true });
+    res.json({ analysis, ai_json: parsedJson, saved: true });
   } catch (error) {
     console.error('Error analyzing financials:', error);
     res.status(500).json({ error: error.message || 'Server error' });
@@ -565,7 +608,7 @@ app.delete('/api/news/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/news/:id/analyze', authenticateToken, async (req, res) => {
+app.post('/api/news/:id/analyze', authenticateToken, aiRateLimiter, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT n.*, c.name as company_name
@@ -594,13 +637,14 @@ app.post('/api/news/:id/analyze', authenticateToken, async (req, res) => {
     5. Recommended Actions`;
 
     const analysis = await callOpenRouterAI(prompt);
+    const parsedJson = parseAIJson(analysis);
 
     await pool.query(
-      'UPDATE news_monitoring SET ai_analysis = $1, ai_analyzed_at = NOW() WHERE id = $2',
-      [analysis, req.params.id]
+      'UPDATE news_monitoring SET ai_analysis = $1, ai_results = $2, ai_analyzed_at = NOW() WHERE id = $3',
+      [analysis, JSON.stringify({ raw: analysis, parsed: parsedJson }), req.params.id]
     );
 
-    res.json({ analysis, saved: true });
+    res.json({ analysis, ai_json: parsedJson, saved: true });
   } catch (error) {
     console.error('Error analyzing news:', error);
     res.status(500).json({ error: error.message || 'Server error' });
@@ -689,7 +733,7 @@ app.delete('/api/risks/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/risks/:id/analyze', authenticateToken, async (req, res) => {
+app.post('/api/risks/:id/analyze', authenticateToken, aiRateLimiter, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT r.*, c.name as company_name
@@ -722,13 +766,14 @@ app.post('/api/risks/:id/analyze', authenticateToken, async (req, res) => {
     6. Deal Structuring Considerations`;
 
     const analysis = await callOpenRouterAI(prompt);
+    const parsedJson = parseAIJson(analysis);
 
     await pool.query(
-      'UPDATE risk_assessment SET ai_analysis = $1, ai_analyzed_at = NOW() WHERE id = $2',
-      [analysis, req.params.id]
+      'UPDATE risk_assessment SET ai_analysis = $1, ai_results = $2, ai_analyzed_at = NOW() WHERE id = $3',
+      [analysis, JSON.stringify({ raw: analysis, parsed: parsedJson }), req.params.id]
     );
 
-    res.json({ analysis, saved: true });
+    res.json({ analysis, ai_json: parsedJson, saved: true });
   } catch (error) {
     console.error('Error analyzing risk:', error);
     res.status(500).json({ error: error.message || 'Server error' });
@@ -817,7 +862,7 @@ app.delete('/api/redflags/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/redflags/:id/analyze', authenticateToken, async (req, res) => {
+app.post('/api/redflags/:id/analyze', authenticateToken, aiRateLimiter, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT rf.*, c.name as company_name
@@ -848,13 +893,14 @@ app.post('/api/redflags/:id/analyze', authenticateToken, async (req, res) => {
     6. Deal Structuring Implications`;
 
     const analysis = await callOpenRouterAI(prompt);
+    const parsedJson = parseAIJson(analysis);
 
     await pool.query(
-      'UPDATE red_flags SET ai_analysis = $1, ai_analyzed_at = NOW() WHERE id = $2',
-      [analysis, req.params.id]
+      'UPDATE red_flags SET ai_analysis = $1, ai_results = $2, ai_analyzed_at = NOW() WHERE id = $3',
+      [analysis, JSON.stringify({ raw: analysis, parsed: parsedJson }), req.params.id]
     );
 
-    res.json({ analysis, saved: true });
+    res.json({ analysis, ai_json: parsedJson, saved: true });
   } catch (error) {
     console.error('Error analyzing red flag:', error);
     res.status(500).json({ error: error.message || 'Server error' });
@@ -943,7 +989,7 @@ app.delete('/api/market/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/market/:id/analyze', authenticateToken, async (req, res) => {
+app.post('/api/market/:id/analyze', authenticateToken, aiRateLimiter, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT m.*, c.name as company_name
@@ -976,13 +1022,14 @@ app.post('/api/market/:id/analyze', authenticateToken, async (req, res) => {
     6. Key Success Factors`;
 
     const analysis = await callOpenRouterAI(prompt);
+    const parsedJson = parseAIJson(analysis);
 
     await pool.query(
-      'UPDATE market_analysis SET ai_analysis = $1, ai_analyzed_at = NOW() WHERE id = $2',
-      [analysis, req.params.id]
+      'UPDATE market_analysis SET ai_analysis = $1, ai_results = $2, ai_analyzed_at = NOW() WHERE id = $3',
+      [analysis, JSON.stringify({ raw: analysis, parsed: parsedJson }), req.params.id]
     );
 
-    res.json({ analysis, saved: true });
+    res.json({ analysis, ai_json: parsedJson, saved: true });
   } catch (error) {
     console.error('Error analyzing market:', error);
     res.status(500).json({ error: error.message || 'Server error' });
@@ -1071,7 +1118,7 @@ app.delete('/api/competitors/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/competitors/:id/analyze', authenticateToken, async (req, res) => {
+app.post('/api/competitors/:id/analyze', authenticateToken, aiRateLimiter, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT ci.*, c.name as company_name
@@ -1103,13 +1150,14 @@ app.post('/api/competitors/:id/analyze', authenticateToken, async (req, res) => 
     6. Strategic Recommendations`;
 
     const analysis = await callOpenRouterAI(prompt);
+    const parsedJson = parseAIJson(analysis);
 
     await pool.query(
-      'UPDATE competitive_intelligence SET ai_analysis = $1, ai_analyzed_at = NOW() WHERE id = $2',
-      [analysis, req.params.id]
+      'UPDATE competitive_intelligence SET ai_analysis = $1, ai_results = $2, ai_analyzed_at = NOW() WHERE id = $3',
+      [analysis, JSON.stringify({ raw: analysis, parsed: parsedJson }), req.params.id]
     );
 
-    res.json({ analysis, saved: true });
+    res.json({ analysis, ai_json: parsedJson, saved: true });
   } catch (error) {
     console.error('Error analyzing competitor:', error);
     res.status(500).json({ error: error.message || 'Server error' });
@@ -1198,7 +1246,7 @@ app.delete('/api/legal/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/legal/:id/analyze', authenticateToken, async (req, res) => {
+app.post('/api/legal/:id/analyze', authenticateToken, aiRateLimiter, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT l.*, c.name as company_name
@@ -1230,13 +1278,14 @@ app.post('/api/legal/:id/analyze', authenticateToken, async (req, res) => {
     6. Deal Structuring Considerations`;
 
     const analysis = await callOpenRouterAI(prompt);
+    const parsedJson = parseAIJson(analysis);
 
     await pool.query(
-      'UPDATE legal_compliance SET ai_analysis = $1, ai_analyzed_at = NOW() WHERE id = $2',
-      [analysis, req.params.id]
+      'UPDATE legal_compliance SET ai_analysis = $1, ai_results = $2, ai_analyzed_at = NOW() WHERE id = $3',
+      [analysis, JSON.stringify({ raw: analysis, parsed: parsedJson }), req.params.id]
     );
 
-    res.json({ analysis, saved: true });
+    res.json({ analysis, ai_json: parsedJson, saved: true });
   } catch (error) {
     console.error('Error analyzing legal issue:', error);
     res.status(500).json({ error: error.message || 'Server error' });
@@ -1326,7 +1375,7 @@ app.delete('/api/management/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/management/:id/analyze', authenticateToken, async (req, res) => {
+app.post('/api/management/:id/analyze', authenticateToken, aiRateLimiter, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT ma.*, c.name as company_name
@@ -1360,10 +1409,11 @@ app.post('/api/management/:id/analyze', authenticateToken, async (req, res) => {
     6. Succession Planning Implications`;
 
     const analysis = await callOpenRouterAI(prompt);
+    const parsedJson = parseAIJson(analysis);
 
     await pool.query(
-      'UPDATE management_assessment SET ai_analysis = $1, ai_analyzed_at = NOW() WHERE id = $2',
-      [analysis, req.params.id]
+      'UPDATE management_assessment SET ai_analysis = $1, ai_results = $2, ai_analyzed_at = NOW() WHERE id = $3',
+      [analysis, JSON.stringify({ raw: analysis, parsed: parsedJson }), req.params.id]
     );
 
     res.json({ analysis, saved: true });
@@ -1456,7 +1506,7 @@ app.delete('/api/deals/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/deals/:id/analyze', authenticateToken, async (req, res) => {
+app.post('/api/deals/:id/analyze', authenticateToken, aiRateLimiter, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT d.*, c.name as company_name
@@ -1490,13 +1540,14 @@ app.post('/api/deals/:id/analyze', authenticateToken, async (req, res) => {
     6. Recommended Next Steps`;
 
     const analysis = await callOpenRouterAI(prompt);
+    const parsedJson = parseAIJson(analysis);
 
     await pool.query(
-      'UPDATE deal_pipeline SET ai_analysis = $1, ai_analyzed_at = NOW() WHERE id = $2',
-      [analysis, req.params.id]
+      'UPDATE deal_pipeline SET ai_analysis = $1, ai_results = $2, ai_analyzed_at = NOW() WHERE id = $3',
+      [analysis, JSON.stringify({ raw: analysis, parsed: parsedJson }), req.params.id]
     );
 
-    res.json({ analysis, saved: true });
+    res.json({ analysis, ai_json: parsedJson, saved: true });
   } catch (error) {
     console.error('Error analyzing deal:', error);
     res.status(500).json({ error: error.message || 'Server error' });
@@ -1585,7 +1636,7 @@ app.delete('/api/risk-scores/:id', authenticateToken, async (req, res) => {
 });
 
 // AI: Generate Risk Score Analysis
-app.post('/api/risk-scores/:id/analyze', authenticateToken, async (req, res) => {
+app.post('/api/risk-scores/:id/analyze', authenticateToken, aiRateLimiter, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT rs.*, c.name as company_name
@@ -1656,13 +1707,14 @@ Specific actions to reduce risk exposure.
 Overall assessment with confidence level.`;
 
     const analysis = await callOpenRouterAI(prompt, 'You are an expert M&A risk analyst specializing in quantitative risk assessment and deal structuring. Provide detailed, actionable analysis with clear recommendations.');
+    const parsedJson = parseAIJson(analysis);
 
     await pool.query(
-      'UPDATE risk_scores SET ai_analysis = $1, ai_analyzed_at = NOW() WHERE id = $2',
-      [analysis, req.params.id]
+      'UPDATE risk_scores SET ai_analysis = $1, ai_results = $2, ai_analyzed_at = NOW() WHERE id = $3',
+      [analysis, JSON.stringify({ raw: analysis, parsed: parsedJson }), req.params.id]
     );
 
-    res.json({ analysis, saved: true });
+    res.json({ analysis, ai_json: parsedJson, saved: true });
   } catch (error) {
     console.error('Error analyzing risk score:', error);
     res.status(500).json({ error: error.message || 'Server error' });
@@ -1751,7 +1803,7 @@ app.delete('/api/synergies/:id', authenticateToken, async (req, res) => {
 });
 
 // AI: Generate Synergy Analysis
-app.post('/api/synergies/:id/analyze', authenticateToken, async (req, res) => {
+app.post('/api/synergies/:id/analyze', authenticateToken, aiRateLimiter, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT sc.*, c.name as company_name
@@ -1832,13 +1884,14 @@ Key risks that could impact synergy realization.
 Expected value calculation with risk adjustments.`;
 
     const analysis = await callOpenRouterAI(prompt, 'You are an expert M&A synergy analyst specializing in merger integration and value creation. Provide detailed, realistic synergy assessments with implementation roadmaps.');
+    const parsedJson = parseAIJson(analysis);
 
     await pool.query(
-      'UPDATE synergy_calculations SET ai_analysis = $1, ai_analyzed_at = NOW() WHERE id = $2',
-      [analysis, req.params.id]
+      'UPDATE synergy_calculations SET ai_analysis = $1, ai_results = $2, ai_analyzed_at = NOW() WHERE id = $3',
+      [analysis, JSON.stringify({ raw: analysis, parsed: parsedJson }), req.params.id]
     );
 
-    res.json({ analysis, saved: true });
+    res.json({ analysis, ai_json: parsedJson, saved: true });
   } catch (error) {
     console.error('Error analyzing synergy:', error);
     res.status(500).json({ error: error.message || 'Server error' });
@@ -1927,7 +1980,7 @@ app.delete('/api/valuations/:id', authenticateToken, async (req, res) => {
 });
 
 // AI: Generate Valuation Analysis
-app.post('/api/valuations/:id/analyze', authenticateToken, async (req, res) => {
+app.post('/api/valuations/:id/analyze', authenticateToken, aiRateLimiter, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT vm.*, c.name as company_name
@@ -2016,10 +2069,11 @@ Entry price vs. walk-away threshold.
 Factors that could move valuation up or down.`;
 
     const analysis = await callOpenRouterAI(prompt, 'You are an expert M&A valuation specialist with deep experience in DCF modeling, comparable analysis, and deal structuring. Provide detailed, well-supported valuation opinions.');
+    const parsedJson = parseAIJson(analysis);
 
     await pool.query(
-      'UPDATE valuation_models SET ai_analysis = $1, ai_analyzed_at = NOW() WHERE id = $2',
-      [analysis, req.params.id]
+      'UPDATE valuation_models SET ai_analysis = $1, ai_results = $2, ai_analyzed_at = NOW() WHERE id = $3',
+      [analysis, JSON.stringify({ raw: analysis, parsed: parsedJson }), req.params.id]
     );
 
     res.json({ analysis, saved: true });
@@ -2111,7 +2165,7 @@ app.delete('/api/red-flag-detections/:id', authenticateToken, async (req, res) =
 });
 
 // AI: Generate Red Flag Analysis
-app.post('/api/red-flag-detections/:id/analyze', authenticateToken, async (req, res) => {
+app.post('/api/red-flag-detections/:id/analyze', authenticateToken, aiRateLimiter, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT rfd.*, c.name as company_name
@@ -2198,10 +2252,11 @@ What would need to happen to clear this red flag.
 When to escalate to deal committee or board.`;
 
     const analysis = await callOpenRouterAI(prompt, 'You are an expert M&A due diligence specialist with deep experience in identifying and assessing deal risks. Provide thorough, actionable analysis of potential deal-breakers.');
+    const parsedJson = parseAIJson(analysis);
 
     await pool.query(
-      'UPDATE red_flag_detections SET ai_analysis = $1, ai_analyzed_at = NOW() WHERE id = $2',
-      [analysis, req.params.id]
+      'UPDATE red_flag_detections SET ai_analysis = $1, ai_results = $2, ai_analyzed_at = NOW() WHERE id = $3',
+      [analysis, JSON.stringify({ raw: analysis, parsed: parsedJson }), req.params.id]
     );
 
     res.json({ analysis, saved: true });
@@ -2293,7 +2348,7 @@ app.delete('/api/integration-plans/:id', authenticateToken, async (req, res) => 
 });
 
 // AI: Generate Integration Plan Analysis
-app.post('/api/integration-plans/:id/analyze', authenticateToken, async (req, res) => {
+app.post('/api/integration-plans/:id/analyze', authenticateToken, aiRateLimiter, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT ip.*, c.name as company_name
@@ -2418,13 +2473,14 @@ How to track and report progress.
 Signs of integration challenges.`;
 
     const analysis = await callOpenRouterAI(prompt, 'You are an expert post-merger integration specialist with extensive experience leading complex integrations. Provide practical, actionable guidance for successful integration execution.');
+    const parsedJson = parseAIJson(analysis);
 
     await pool.query(
-      'UPDATE integration_plans SET ai_analysis = $1, ai_analyzed_at = NOW() WHERE id = $2',
-      [analysis, req.params.id]
+      'UPDATE integration_plans SET ai_analysis = $1, ai_results = $2, ai_analyzed_at = NOW() WHERE id = $3',
+      [analysis, JSON.stringify({ raw: analysis, parsed: parsedJson }), req.params.id]
     );
 
-    res.json({ analysis, saved: true });
+    res.json({ analysis, ai_json: parsedJson, saved: true });
   } catch (error) {
     console.error('Error analyzing integration plan:', error);
     res.status(500).json({ error: error.message || 'Server error' });
@@ -2639,8 +2695,27 @@ app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
   }
 });
 
+// ==================== NEW AI + EXPORT ROUTES ====================
+app.use('/api/ai', authenticateToken, aiRateLimiter, require('./routes/aiNew'));
+app.use('/api/export', authenticateToken, require('./routes/export'));
+app.use('/api/watchlist', authenticateToken, require('./routes/watchlist'));
+app.use('/api/multi-round-compare', authenticateToken, require('./routes/multiRoundCompare'));
+app.use('/api/agentic-diligence', authenticateToken, aiRateLimiter, require('./routes/agenticDiligence'));
+app.use('/api/founder-call-analysis', authenticateToken, aiRateLimiter, require('./routes/founderCallAnalysis'));
+app.use('/api/cap-table', authenticateToken, require('./routes/capTableModel'));
+app.use('/api/diligence-checklist', authenticateToken, require('./routes/diligenceChecklist'));
+app.use('/api/sec-filings', authenticateToken, require('./routes/secFilings'));
+
 // Start server
+
+// === Batch 03 Gaps & Frontend Mounts ===
+try {
+  const _batch03 = require('./routes/batch03Gaps');
+  if (typeof authenticateToken === 'function') app.use('/api', authenticateToken, _batch03);
+  else app.use('/api', _batch03);
+} catch (_e) { /* batch03 gap routes optional */ }
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-  console.log(`Using AI model: ${process.env.OPENROUTER_MODEL || 'anthropic/claude-haiku-4.5'}`);
+  console.log(`Using AI model: ${process.env.OPENROUTER_MODEL || 'anthropic/claude-3-5-sonnet-20241022'}`);
 });

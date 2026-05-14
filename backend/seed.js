@@ -59,6 +59,7 @@ async function seedDatabase() {
         description TEXT,
         status VARCHAR(50) DEFAULT 'Under Review',
         ai_analysis TEXT,
+        ai_results JSONB DEFAULT '{}'::jsonb,
         ai_analyzed_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
@@ -77,6 +78,7 @@ async function seedDatabase() {
         operating_margin DECIMAL(5,2),
         debt_to_equity DECIMAL(5,2),
         ai_analysis TEXT,
+        ai_results JSONB DEFAULT '{}'::jsonb,
         ai_analyzed_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
@@ -93,6 +95,7 @@ async function seedDatabase() {
         published_date DATE,
         category VARCHAR(100),
         ai_analysis TEXT,
+        ai_results JSONB DEFAULT '{}'::jsonb,
         ai_analyzed_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
@@ -110,6 +113,7 @@ async function seedDatabase() {
         mitigation_strategy TEXT,
         status VARCHAR(50) DEFAULT 'Open',
         ai_analysis TEXT,
+        ai_results JSONB DEFAULT '{}'::jsonb,
         ai_analyzed_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
@@ -126,6 +130,7 @@ async function seedDatabase() {
         recommendation TEXT,
         status VARCHAR(50) DEFAULT 'Active',
         ai_analysis TEXT,
+        ai_results JSONB DEFAULT '{}'::jsonb,
         ai_analyzed_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
@@ -142,6 +147,7 @@ async function seedDatabase() {
         geographic_presence TEXT,
         trends TEXT,
         ai_analysis TEXT,
+        ai_results JSONB DEFAULT '{}'::jsonb,
         ai_analyzed_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
@@ -158,6 +164,7 @@ async function seedDatabase() {
         threat_level VARCHAR(50),
         notes TEXT,
         ai_analysis TEXT,
+        ai_results JSONB DEFAULT '{}'::jsonb,
         ai_analyzed_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
@@ -175,6 +182,7 @@ async function seedDatabase() {
         deadline DATE,
         resolution TEXT,
         ai_analysis TEXT,
+        ai_results JSONB DEFAULT '{}'::jsonb,
         ai_analyzed_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
@@ -193,6 +201,7 @@ async function seedDatabase() {
         concerns TEXT,
         recommendation TEXT,
         ai_analysis TEXT,
+        ai_results JSONB DEFAULT '{}'::jsonb,
         ai_analyzed_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
@@ -212,6 +221,7 @@ async function seedDatabase() {
         priority VARCHAR(50),
         notes TEXT,
         ai_analysis TEXT,
+        ai_results JSONB DEFAULT '{}'::jsonb,
         ai_analyzed_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
@@ -234,6 +244,7 @@ async function seedDatabase() {
         risk_mitigation_suggestions TEXT,
         confidence_level DECIMAL(3,1),
         ai_analysis TEXT,
+        ai_results JSONB DEFAULT '{}'::jsonb,
         ai_analyzed_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
@@ -254,6 +265,7 @@ async function seedDatabase() {
         implementation_costs DECIMAL(15,2),
         net_synergy_value DECIMAL(15,2),
         ai_analysis TEXT,
+        ai_results JSONB DEFAULT '{}'::jsonb,
         ai_analyzed_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
@@ -275,6 +287,7 @@ async function seedDatabase() {
         implied_ev_revenue_multiple DECIMAL(5,2),
         key_assumptions TEXT,
         ai_analysis TEXT,
+        ai_results JSONB DEFAULT '{}'::jsonb,
         ai_analyzed_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
@@ -294,6 +307,7 @@ async function seedDatabase() {
         investigation_status VARCHAR(50) DEFAULT 'Pending',
         resolution_notes TEXT,
         ai_analysis TEXT,
+        ai_results JSONB DEFAULT '{}'::jsonb,
         ai_analyzed_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
@@ -315,6 +329,7 @@ async function seedDatabase() {
         risk_mitigation_plan TEXT,
         success_metrics TEXT,
         ai_analysis TEXT,
+        ai_results JSONB DEFAULT '{}'::jsonb,
         ai_analyzed_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
