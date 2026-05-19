@@ -2715,6 +2715,9 @@ try {
   else app.use('/api', _batch03);
 } catch (_e) { /* batch03 gap routes optional */ }
 
+// Custom Views (VIZ + NON-VIZ) - mounted BEFORE 404 / listen
+app.use('/api/custom-views', authenticateToken, require('./routes/customViews'));
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Using AI model: ${process.env.OPENROUTER_MODEL || 'anthropic/claude-3-5-sonnet-20241022'}`);

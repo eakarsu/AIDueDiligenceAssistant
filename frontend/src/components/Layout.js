@@ -22,6 +22,7 @@ const menuItems = [
   { path: '/integration-planner', label: 'AI Integration Planner', icon: '🗺️', isAI: true },
   { path: '/watchlist', label: 'Watchlist Alerts', icon: '🔔', isAI: true },
   { path: '/ai-tools', label: 'AI Deal Tools', icon: '🧠', isAI: true },
+  { path: '/custom-views', label: 'DD Views', icon: '📐' },
   { divider: true, label: 'Account' },
   { path: '/profile', label: 'My Profile', icon: '👤' },
   { path: '/settings', label: 'Settings', icon: '⚙️' },

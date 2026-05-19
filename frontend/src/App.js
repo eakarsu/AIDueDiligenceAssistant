@@ -28,6 +28,7 @@ import Profile from './pages/Profile';
 import Settings from './pages/Settings';
 
 import Batch03Features from './pages/Batch03Features';
+import CustomViewsPage from './pages/CustomViewsPage';
 
 const ProtectedRoute = ({ children, requiredPermission }) => {
   const { token, loading, hasPermission } = useAuth();
@@ -85,6 +86,7 @@ function App() {
               <Route path="/ai-tools" element={<ProtectedRoute><Layout><AITools /></Layout></ProtectedRoute>} />
               <Route path="/profile" element={<ProtectedRoute><Layout><Profile /></Layout></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
+              <Route path="/custom-views" element={<ProtectedRoute><Layout><CustomViewsPage /></Layout></ProtectedRoute>} />
             </Routes>
           </Router>
         </ToastProvider>
