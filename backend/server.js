@@ -2705,6 +2705,7 @@ app.use('/api/founder-call-analysis', authenticateToken, aiRateLimiter, require(
 app.use('/api/cap-table', authenticateToken, require('./routes/capTableModel'));
 app.use('/api/diligence-checklist', authenticateToken, require('./routes/diligenceChecklist'));
 app.use('/api/sec-filings', authenticateToken, require('./routes/secFilings'));
+app.use('/api/key-person-risk-map', authenticateToken, require('./routes/keyPersonRiskMap'));
 
 // Start server
 

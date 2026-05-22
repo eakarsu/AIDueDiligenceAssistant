@@ -29,6 +29,12 @@ import Settings from './pages/Settings';
 
 import Batch03Features from './pages/Batch03Features';
 import CustomViewsPage from './pages/CustomViewsPage';
+import KeyPersonRiskMap from './pages/KeyPersonRiskMap';
+
+import CodexCustomVizFeature from './pages/CodexCustomVizFeature';
+import CodexOperationsFeature from './pages/CodexOperationsFeature';
+
+import TimelineView from './pages/TimelineView';
 
 const ProtectedRoute = ({ children, requiredPermission }) => {
   const { token, loading, hasPermission } = useAuth();
@@ -63,6 +69,10 @@ function App() {
         <ToastProvider>
           <Router>
             <Routes>
+        <Route path="/insights/timeline" element={<ProtectedRoute><TimelineView /></ProtectedRoute>} />
+        <Route path="/codex/custom-viz" element={<ProtectedRoute><CodexCustomVizFeature /></ProtectedRoute>} />
+        <Route path="/codex/operations" element={<ProtectedRoute><CodexOperationsFeature /></ProtectedRoute>} />
+
           <Route path="/batch03" element={<Batch03Features />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
@@ -87,6 +97,7 @@ function App() {
               <Route path="/profile" element={<ProtectedRoute><Layout><Profile /></Layout></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
               <Route path="/custom-views" element={<ProtectedRoute><Layout><CustomViewsPage /></Layout></ProtectedRoute>} />
+              <Route path="/key-person-risk-map" element={<ProtectedRoute><Layout><KeyPersonRiskMap /></Layout></ProtectedRoute>} />
             </Routes>
           </Router>
         </ToastProvider>
