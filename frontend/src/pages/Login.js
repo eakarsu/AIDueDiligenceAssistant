@@ -10,7 +10,7 @@ const Login = () => {
   const [resetMode, setResetMode] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
   const [resetMsg, setResetMsg] = useState('');
-  const { login, getDemoCredentials, requestPasswordReset } = useAuth();
+  const { login, requestPasswordReset } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -23,14 +23,6 @@ const Login = () => {
     } else {
       setError(result.error);
     }
-    setLoading(false);
-  };
-
-  const handleDemoLogin = async () => {
-    setLoading(true);
-    const creds = await getDemoCredentials();
-    setEmail(creds.email);
-    setPassword(creds.password);
     setLoading(false);
   };
 
@@ -95,7 +87,6 @@ const Login = () => {
                 </span>
               ) : 'Sign In'}
             </button>
-            <button type="button" onClick={handleDemoLogin} style={styles.demoBtn} disabled={loading}>Use Demo Credentials</button>
           </form>
         )}
 
@@ -103,7 +94,7 @@ const Login = () => {
           <p style={{ color: '#a1a1aa', fontSize: '14px', marginBottom: '12px' }}>
             Don't have an account? <span onClick={() => navigate('/register')} style={{ color: '#3b82f6', cursor: 'pointer', fontWeight: '600' }}>Sign Up</span>
           </p>
-          <p style={styles.footerText}>Investment firms pay $1000+/deal for comprehensive due diligence analysis</p>
+          <p style={styles.footerText}>Authorized evidence review with matter isolation and professional sign-off</p>
         </div>
       </div>
 

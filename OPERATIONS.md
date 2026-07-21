@@ -1,0 +1,7 @@
+# Governed diligence operations
+
+Run `scripts/bootstrap.sh`, configure `.env`, and apply `scripts/migrate.sh`. `start.sh` is non-destructive and stops only child processes it created. It does not install, seed, migrate, create databases, kill ports, or expose demo credentials. The destructive legacy seed is guarded by `CONFIRM_DEMO_SEED=yes` for isolated demos.
+
+The supported `/api/governed-diligence` workflow provides workspace/matter roles, authorization and retention context, content hashes and evidence provenance, matter-scoped citations, request/exception tracking, contradiction and citation-coverage readiness, partner-only sign-off, integration failure records, and immutable audit events. Public registration cannot self-assign partner status. Direct email-based password reset and default JWT secrets were removed. Generated cross-matter CRUD and model surfaces are quarantined by default and forbidden in production.
+
+No data-room, OCR, corporate-data, sanctions, identity, collaboration, or matter-system connector is represented as live. Each requires a contract, credentials, least-privilege scopes, privilege/confidentiality handling, reconciliation, retention/deletion behavior, and failure testing. Extraction accuracy, entity resolution, citation coverage, contradiction recall, reviewer agreement, accessibility, export, incident response, and legal/professional review remain launch gates. Model output cannot be used as a signed diligence conclusion.

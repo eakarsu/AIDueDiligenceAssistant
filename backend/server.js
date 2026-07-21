@@ -6,6 +6,9 @@ const jwt = require('jsonwebtoken');
 const axios = require('axios');
 require('dotenv').config({ path: '../.env' });
 const pool = require('./db');
+const { validateRuntime } = require('./config/runtime');
+
+validateRuntime();
 
 const app = express();
 const PORT = process.env.BACKEND_PORT || 3001;
@@ -30,6 +33,15 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '1mb' }));
 
+// Quarantine the generated cross-matter/model endpoints by default. Only the
+// governed matter workflow and hardened identity endpoints are supported.
+app.use('/api', (req, res, next) => {
+  const alwaysAllowed = ['/auth/login','/auth/register','/auth/request-reset','/auth/reset-password','/auth/change-password','/auth/profile','/governed-diligence','/health'];
+  if (alwaysAllowed.some(prefix => req.path.startsWith(prefix))) return next();
+  if (process.env.ENABLE_GENERATED_AI_SURFACES === 'true' && process.env.NODE_ENV !== 'production') return next();
+  return res.status(404).json({ error: 'Legacy generated endpoint is outside the supported product boundary' });
+});
+
 // JWT Middleware
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
@@ -39,7 +51,7 @@ const authenticateToken = (req, res, next) => {
     return res.status(401).json({ error: 'Access denied' });
   }
 
-  jwt.verify(token, process.env.JWT_SECRET || 'default_secret', (err, user) => {
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
     if (err) {
       return res.status(403).json({ error: 'Invalid token' });
     }
@@ -70,10 +82,13 @@ const validateRequired = (fields, body) => {
 };
 
 const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-const validatePassword = (pw) => pw && pw.length >= 6 && /[A-Z]/.test(pw) && /[0-9]/.test(pw);
+const validatePassword = (pw) => pw && pw.length >= 12 && /[A-Z]/.test(pw) && /[a-z]/.test(pw) && /[0-9]/.test(pw);
 
 // OpenRouter AI Service - Updated to use configured model
 const callOpenRouterAI = async (prompt, systemPrompt = '') => {
+  if (process.env.ENABLE_GENERATED_AI_SURFACES !== 'true' || process.env.NODE_ENV === 'production') {
+    throw new Error('Generated AI analysis is quarantined; use the governed cited-evidence workflow');
+  }
   try {
     const model = process.env.OPENROUTER_MODEL || 'anthropic/claude-3-5-sonnet-20241022';
     const response = await axios.post(
@@ -124,7 +139,7 @@ app.post('/api/auth/login', async (req, res) => {
 
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
-      process.env.JWT_SECRET || 'default_secret',
+      process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
 
@@ -135,29 +150,21 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// Get demo credentials
-app.get('/api/auth/demo-credentials', (req, res) => {
-  res.json({
-    email: process.env.DEMO_EMAIL || 'admin@duediligence.com',
-    password: process.env.DEMO_PASSWORD || 'Demo123!'
-  });
-});
-
 // Register
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password } = req.body;
     const errors = {};
     if (!name || name.trim().length < 2) errors.name = 'Name must be at least 2 characters';
     if (!email || !validateEmail(email)) errors.email = 'Valid email is required';
-    if (!password || !validatePassword(password)) errors.password = 'Password must be 6+ chars with uppercase and number';
+    if (!password || !validatePassword(password)) errors.password = 'Password must be 12+ chars with uppercase, lowercase, and number';
     if (Object.keys(errors).length > 0) return res.status(400).json({ error: Object.values(errors)[0], errors });
 
     const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
     if (existing.rows.length > 0) return res.status(409).json({ error: 'Email already registered' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const validRole = ['analyst', 'partner'].includes(role) ? role : 'analyst';
+    const validRole = 'analyst';
     const result = await pool.query(
       'INSERT INTO users (email, password, name, role) VALUES ($1, $2, $3, $4) RETURNING id, email, name, role',
       [email, hashedPassword, name, validRole]
@@ -171,34 +178,12 @@ app.post('/api/auth/register', async (req, res) => {
 
 // Request Password Reset
 app.post('/api/auth/request-reset', async (req, res) => {
-  try {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ error: 'Email is required' });
-    // In production, send email with reset link. For demo, just acknowledge.
-    const user = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
-    // Always return success to prevent email enumeration
-    res.json({ message: 'If that email exists, a password reset link has been sent.' });
-  } catch (error) {
-    console.error('Reset request error:', error);
-    res.status(500).json({ error: 'Server error' });
-  }
+  res.status(503).json({ error: 'Password reset delivery is not configured. Contact an authorized administrator without sending credentials over email.' });
 });
 
-// Reset Password (demo: allows direct reset with email)
+// The legacy direct-by-email reset was an account-takeover vulnerability.
 app.post('/api/auth/reset-password', async (req, res) => {
-  try {
-    const { email, newPassword } = req.body;
-    if (!email || !newPassword) return res.status(400).json({ error: 'Email and new password required' });
-    if (!validatePassword(newPassword)) return res.status(400).json({ error: 'Password must be 6+ chars with uppercase and number' });
-
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    const result = await pool.query('UPDATE users SET password = $1, updated_at = NOW() WHERE email = $2 RETURNING id', [hashedPassword, email]);
-    if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
-    res.json({ message: 'Password reset successful' });
-  } catch (error) {
-    console.error('Reset error:', error);
-    res.status(500).json({ error: 'Server error' });
-  }
+  res.status(410).json({ error: 'Direct password reset is disabled. Use authenticated password change or an administrator-approved recovery process.' });
 });
 
 // Change Password
@@ -206,7 +191,7 @@ app.put('/api/auth/change-password', authenticateToken, async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
     if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Current and new password required' });
-    if (!validatePassword(newPassword)) return res.status(400).json({ error: 'Password must be 6+ chars with uppercase and number' });
+    if (!validatePassword(newPassword)) return res.status(400).json({ error: 'Password must be 12+ chars with uppercase, lowercase, and number' });
 
     const user = await pool.query('SELECT * FROM users WHERE id = $1', [req.user.id]);
     if (user.rows.length === 0) return res.status(404).json({ error: 'User not found' });
@@ -2718,6 +2703,8 @@ try {
 
 // Custom Views (VIZ + NON-VIZ) - mounted BEFORE 404 / listen
 app.use('/api/custom-views', authenticateToken, require('./routes/customViews'));
+app.use('/api/governed-diligence', authenticateToken, require('./routes/governedDiligence')());
+app.get('/api/health', (req,res) => res.json({status:'ok',supportedBoundary:'governed-diligence',timestamp:new Date().toISOString()}));
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

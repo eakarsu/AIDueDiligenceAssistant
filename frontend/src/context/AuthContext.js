@@ -51,15 +51,6 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('user', JSON.stringify(userData));
   };
 
-  const getDemoCredentials = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/auth/demo-credentials`);
-      return response.data;
-    } catch (error) {
-      return { email: 'admin@duediligence.com', password: 'Demo123!' };
-    }
-  };
-
   const requestPasswordReset = async (email) => {
     try {
       const response = await axios.post(`${API_URL}/auth/request-reset`, { email });
@@ -82,7 +73,7 @@ export const AuthProvider = ({ children }) => {
   return (
     <AuthContext.Provider value={{
       user, token, login, logout, loading,
-      getDemoCredentials, updateUser, requestPasswordReset, hasPermission,
+      updateUser, requestPasswordReset, hasPermission,
     }}>
       {children}
     </AuthContext.Provider>
