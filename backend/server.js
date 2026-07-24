@@ -36,7 +36,7 @@ app.use(express.json({ limit: '1mb' }));
 // Quarantine the generated cross-matter/model endpoints by default. Only the
 // governed matter workflow and hardened identity endpoints are supported.
 app.use('/api', (req, res, next) => {
-  const alwaysAllowed = ['/auth/login','/auth/register','/auth/request-reset','/auth/reset-password','/auth/change-password','/auth/profile','/governed-diligence','/health'];
+  const alwaysAllowed = ['/auth/login','/auth/register','/auth/request-reset','/auth/reset-password','/auth/change-password','/auth/profile','/governed-diligence','/ai','/health'];
   if (alwaysAllowed.some(prefix => req.path.startsWith(prefix))) return next();
   if (process.env.ENABLE_GENERATED_AI_SURFACES === 'true' && process.env.NODE_ENV !== 'production') return next();
   return res.status(404).json({ error: 'Legacy generated endpoint is outside the supported product boundary' });
