@@ -36,7 +36,7 @@ app.use(express.json({ limit: '1mb' }));
 // Quarantine the generated cross-matter/model endpoints by default. Only the
 // governed matter workflow and hardened identity endpoints are supported.
 app.use('/api', (req, res, next) => {
-  const alwaysAllowed = ['/auth/login','/auth/register','/auth/request-reset','/auth/reset-password','/auth/change-password','/auth/profile','/governed-diligence','/ai','/health'];
+  const alwaysAllowed = ['/auth/login','/auth/register','/auth/request-reset','/auth/reset-password','/auth/change-password','/auth/profile','/governed-diligence','/acquisition-modernization','/ai','/health'];
   if (alwaysAllowed.some(prefix => req.path.startsWith(prefix))) return next();
   if (process.env.ENABLE_GENERATED_AI_SURFACES === 'true' && process.env.NODE_ENV !== 'production') return next();
   return res.status(404).json({ error: 'Legacy generated endpoint is outside the supported product boundary' });
@@ -83,6 +83,8 @@ const validateRequired = (fields, body) => {
 
 const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const validatePassword = (pw) => pw && pw.length >= 12 && /[A-Z]/.test(pw) && /[a-z]/.test(pw) && /[0-9]/.test(pw);
+
+app.use('/api/acquisition-modernization', authenticateToken, require('./routes/acquisitionModernization'));
 
 // OpenRouter AI Service - Updated to use configured model
 const callOpenRouterAI = async (prompt, systemPrompt = '') => {

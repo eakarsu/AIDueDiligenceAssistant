@@ -20,6 +20,7 @@ const menuItems = [
   { path: '/valuation-modeler', label: 'AI Valuation Modeler', icon: '💎', isAI: true },
   { path: '/red-flag-detector', label: 'AI Red Flag Detector', icon: '🔴', isAI: true },
   { path: '/integration-planner', label: 'AI Integration Planner', icon: '🗺️', isAI: true },
+  { path: '/acquisition-modernization', label: 'Acquisition Modernization', icon: '🏗️', isAI: true },
   { path: '/watchlist', label: 'Watchlist Alerts', icon: '🔔', isAI: true },
   { path: '/ai-tools', label: 'AI Deal Tools', icon: '🧠', isAI: true },
   { path: '/custom-views', label: 'DD Views', icon: '📐' },

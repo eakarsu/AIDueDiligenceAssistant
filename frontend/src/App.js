@@ -30,6 +30,7 @@ import Settings from './pages/Settings';
 import Batch03Features from './pages/Batch03Features';
 import CustomViewsPage from './pages/CustomViewsPage';
 import KeyPersonRiskMap from './pages/KeyPersonRiskMap';
+import AcquisitionModernization from './pages/AcquisitionModernization';
 
 import CodexCustomVizFeature from './pages/CodexCustomVizFeature';
 import CodexOperationsFeature from './pages/CodexOperationsFeature';
@@ -98,6 +99,7 @@ function App() {
               <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
               <Route path="/custom-views" element={<ProtectedRoute><Layout><CustomViewsPage /></Layout></ProtectedRoute>} />
               <Route path="/key-person-risk-map" element={<ProtectedRoute><Layout><KeyPersonRiskMap /></Layout></ProtectedRoute>} />
+              <Route path="/acquisition-modernization" element={<ProtectedRoute><Layout><AcquisitionModernization /></Layout></ProtectedRoute>} />
             </Routes>
           </Router>
         </ToastProvider>
