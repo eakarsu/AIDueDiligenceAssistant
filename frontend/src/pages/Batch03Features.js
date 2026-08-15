@@ -2,6 +2,7 @@
 // Auto-generated frontend page (lean v0). Wires Custom Feature Suggestions
 // and Gap endpoints (AI counterparts + non-AI features) to backend routes.
 import React, { useState } from 'react';
+import GeneratedAiResponse from './GeneratedAiResponse';
 
 const API_BASE = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL) || 'http://localhost:4000/api';
 
@@ -120,9 +121,7 @@ export default function Batch03Features() {
           </div>
           {error && (<div style={{ marginTop: 12, padding: 10, background: '#fee2e2', color: '#991b1b', borderRadius: 4, fontSize: 13 }}>{error}</div>)}
           {results[current.slug] && (
-            <pre style={{ marginTop: 12, padding: 10, background: '#0b1020', color: '#cbd5e1', borderRadius: 4, overflow: 'auto', maxHeight: 360, fontSize: 12 }}>
-              {typeof results[current.slug] === 'string' ? results[current.slug] : JSON.stringify(results[current.slug], null, 2)}
-            </pre>
+            <GeneratedAiResponse response={results[current.slug]} />
           )}
         </div>
       )}

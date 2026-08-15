@@ -1,3 +1,4 @@
+import GeneratedAiResponse from './GeneratedAiResponse';
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { API_URL } from '../context/AuthContext';
@@ -311,7 +312,7 @@ const AITools = () => {
     return (
       <div style={styles.resultBox}>
         <h4 style={styles.resultTitle}>Result {result.cached && <span style={styles.cachedBadge}>cached</span>}</h4>
-        <pre style={styles.resultJson}>{JSON.stringify(result, null, 2)}</pre>
+        <GeneratedAiResponse response={result} />
       </div>
     );
   };
